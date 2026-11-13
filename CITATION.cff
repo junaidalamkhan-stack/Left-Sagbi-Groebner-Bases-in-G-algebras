@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+title: "Left Sagbi–Gröbner Bases in G-Algebras"
+version: "1.0"
+date-released: "2026-11-13"
+license: GPL-3.0-or-later
+repository-code: "https://github.com/junaidalamkhan-stack/Left-Sagbi-Groebner-Bases-in-G-algebras"
+keywords:
+  - Sagbi bases
+  - Sagbi-Groebner bases
+  - G-algebras
+  - PBW algebras
+  - Singular
+  - Plural
+authors:
+  - family-names: Khan
+    given-names: Muhammad Abdul Basit
+    affiliation: "Institute of Business Administration, Karachi"
+  - family-names: Khan
+    given-names: Junaid Alam
+    affiliation: "Institute of Business Administration, Karachi"
+preferred-citation:
+  type: article
+  title: "Left Sagbi–Gröbner bases in G-algebras"
+  authors:
+    - family-names: Khan
+      given-names: Muhammad Abdul Basit
+    - family-names: Khan
+      given-names: Junaid Alam

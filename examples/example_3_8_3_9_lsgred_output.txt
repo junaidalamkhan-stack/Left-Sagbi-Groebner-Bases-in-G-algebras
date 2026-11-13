@@ -1,0 +1,5 @@
+Example 3.8 (A_1, lex x > d)
+x3d5+6x2d4+6xd3
+19xd3+12d2
+Example 3.9 (U(sl_2), dp)
+h2

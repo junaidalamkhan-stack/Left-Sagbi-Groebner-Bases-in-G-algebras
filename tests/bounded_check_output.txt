@@ -1,0 +1,12 @@
+Example 3.20 (A_1), input generators (negative control):
+  not left SG-reducible: leading monomial x3d
+  not left SG-reducible: leading monomial x2d2
+  242 products m(H)*g with deg m(H) <= 8, span of dimension 41, leading monomials not left SG-reducible: 11
+Example 3.20 (A_1), output of lsgb:
+  605 products m(H)*g with deg m(H) <= 8, span of dimension 45, leading monomials not left SG-reducible: 0
+Example 3.19 (U(sl_2)), input generators (negative control):
+  not left SG-reducible: leading monomial e2
+  not left SG-reducible: leading monomial e3
+  682 products m(H)*g with deg m(H) <= 8, span of dimension 58, leading monomials not left SG-reducible: 8
+Example 3.19 (U(sl_2)), output of lsgb:
+  1023 products m(H)*g with deg m(H) <= 8, span of dimension 59, leading monomials not left SG-reducible: 0

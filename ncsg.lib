@@ -1,0 +1,441 @@
+///////////////////////////////////////////////////////////////////////////
+version="1.0";
+category="Noncommutative Algebra";
+info="
+LIBRARY: ncsg.lib - Computing Left SAGBI-Groebner Bases
+
+OVERVIEW:
+This library implements the extension of SAGBI-Groebner theory to non-
+ commutative G-algebras. It provides routines for calculating final left 
+ SG-reduction and computing Groebner bases within subalgebras of a G-algebra.
+
+AUTHORS:
+ Muhammad Abdul Basit Khan  <mabasit@iba.edu.pk>
+ Junaid Alam Khan            <jakhan@iba.edu.pk>
+
+EXAMPLES:
+See the commented section at the bottom of this file for ready-to-run 
+examples involving the Weyl Algebra A_1 and U(sl_2).
+";
+
+LIB "nctools.lib";
+
+// =====================================================================
+// Procedure: monsrch 
+// =====================================================================
+proc monsrch(intvec target, list gen_exps, int idx, intvec current_y)
+{
+   int n = size(target);
+   int m = size(gen_exps);
+   int is_zero = 1;
+   int v;
+   for(v=1; v<=n; v++)
+   {
+      if (target[v] != 0) { is_zero = 0; break; }
+   }
+   if (is_zero == 1) { return(list(1, current_y)); }
+   if (idx > m) { return(list(0)); }
+   
+   intvec g_ev = gen_exps[idx];
+   int max_clicks = 999999;
+   int has_positive = 0;
+   for(v=1; v<=n; v++)
+   {
+      if (g_ev[v] > 0)
+      {
+         has_positive = 1;
+         int clicks = target[v] div g_ev[v]; 
+         if (clicks < max_clicks) { max_clicks = clicks; }
+      }
+   }
+   if (has_positive == 0) { max_clicks = 0; }
+   
+   for(int c = max_clicks; c >= 0; c--)
+   {
+      intvec next_target = target;
+      int possible = 1;
+      for(v=1; v<=n; v++)
+      {
+         next_target[v] = target[v] - c * g_ev[v];
+         if (next_target[v] < 0) { possible = 0; break; }
+      }
+      if (possible == 1)
+      {
+         intvec next_y = current_y;
+         next_y[idx] = c;
+         list res = monsrch(next_target, gen_exps, idx + 1, next_y);
+         if (res[1] == 1) { return(res); }
+      }
+   }
+   return(list(0));
+}
+
+// =====================================================================
+// Procedure: lmult
+// =====================================================================
+proc lmult(poly M, ideal H)
+{
+   int n = nvars(basering);
+   int m = ncols(H);
+   intvec ev_M = leadexp(M);
+   
+   list gen_exps;
+   int i;
+   for(i=1; i<=m; i++)
+   {
+      gen_exps[i] = leadexp(H[i]);
+   }
+   
+   intvec current_y;
+   for(i=1; i<=m; i++) { current_y[i] = 0; }
+   
+   list ans = monsrch(ev_M, gen_exps, 1, current_y);
+   if (ans[1] == 1)
+   {
+      intvec y_exps = ans[2];
+      poly result = 1;
+      for(i=1; i<=m; i++)
+      {
+         if (y_exps[i] > 0) { result = result * (H[i]^y_exps[i]); }
+      }
+      return(result);
+   }
+   else
+   {
+      return(0);
+   }
+}
+
+// =====================================================================
+// Procedure: lsgred 
+// =====================================================================
+proc lsgred(poly f, ideal H, ideal G_ideal)
+{
+   if (ncols(G_ideal) == 0) { return(f); }
+   
+   poly r = f;
+   poly p = 0;
+   int n_vars = nvars(basering);
+   
+   while(r != 0)
+   {
+      intvec ev_r = leadexp(r);
+      int reduced = 0;
+      
+      for(int i=1; i<=ncols(G_ideal); i++)
+      {
+         if (G_ideal[i] != 0)
+         {
+            intvec ev_g = leadexp(G_ideal[i]);
+            int is_div = 1;
+            for(int v=1; v<=n_vars; v++) {
+               if(ev_r[v] < ev_g[v]) { is_div = 0; break; }
+            }
+            
+            if (is_div == 1) 
+            {
+               poly lt_m = 1;
+               for(int v=1; v<=n_vars; v++) {
+                  if(ev_r[v] - ev_g[v] > 0) {
+                     lt_m = lt_m * (var(v)^(ev_r[v] - ev_g[v]));
+                  }
+               }
+               
+               poly m_nc;
+               if (lt_m == 1) {
+                  m_nc = 1;
+               } else {
+                  m_nc = lmult(lt_m, H);
+               }
+               
+               if (m_nc != 0) 
+               {
+                  poly term_to_subtract = m_nc * G_ideal[i];
+                  if (term_to_subtract != 0 and leadexp(term_to_subtract) == ev_r) 
+                  {
+                     number c = leadcoef(r) / leadcoef(term_to_subtract);
+                     r = r - c * term_to_subtract;
+                     reduced = 1;
+                     break;
+                  }
+               }
+            }
+         }
+      }
+      
+      if(reduced == 0)
+      {
+         p = p + lead(r);
+         r = r - lead(r);
+      }
+   }
+   return(p);
+}
+
+// =====================================================================
+// Procedure: syzfam
+// =====================================================================
+proc syzfam(poly g1, poly g2, ideal H)
+{
+   def orig_ring = basering;
+   ideal res_spolys;
+   int sp_idx = 1;
+   
+   // Pre-declare variables in the original ring scope
+   poly s_poly_nc;
+   
+   int n_vars = nvars(orig_ring);
+   int m_vars = ncols(H);
+
+   string ring_def = "ring R_pair = 0, (";
+   int i;
+   for(i=1; i<=n_vars; i++) { ring_def = ring_def + varstr(i) + ","; }
+   for(i=1; i<=m_vars; i++) { ring_def = ring_def + "y" + string(i) + ","; }
+   ring_def = ring_def + "z1,z2), (dp(" + string(n_vars) + "), dp(" + string(m_vars) + "), dp(2));";
+   execute(ring_def);
+
+   ideal H_local = fetch(orig_ring, H);
+   poly g1_local = fetch(orig_ring, g1);
+   poly g2_local = fetch(orig_ring, g2);
+
+   ideal J;
+   int idx = 1;
+   for(i=1; i<=m_vars; i++) {
+      J[idx] = var(n_vars + i) - lead(H_local[i]);
+      idx = idx + 1;
+   }
+   J[idx] = var(n_vars + m_vars + 1) - lead(g1_local);
+   J[idx+1] = var(n_vars + m_vars + 2) - lead(g2_local);
+
+   ideal G_pair = std(J);
+   
+   int z1_idx = n_vars + m_vars + 1;
+   int z2_idx = n_vars + m_vars + 2;
+
+   for(i=1; i<=ncols(G_pair); i++) {
+      poly p = G_pair[i];
+      if (p == 0) { continue; }
+      
+      int valid = 1;
+      
+      // Filter Step 1: Analyze exponent vector (leadexp) for every term
+      for (int t_idx = 1; t_idx <= size(p); t_idx++) {
+         poly term_t = p[t_idx];
+         intvec ev_t = leadexp(term_t);
+         
+         // Rule 1: No ambient variables allowed
+         for(int v=1; v<=n_vars; v++) {
+            if (ev_t[v] > 0) { valid = 0; break; }
+         }
+         if (valid == 0) { break; }
+         
+         // Rule 2: Linear in z1, z2 (degree exactly 1 for every term)
+         int z_deg = ev_t[z1_idx] + ev_t[z2_idx];
+         if (z_deg != 1) { valid = 0; break; }
+      }
+      
+      // Filter Step 2: Assemble S-Polynomial Term by Term
+      if (valid == 1) {
+         setring orig_ring;
+         s_poly_nc = 0;
+         setring R_pair;
+         
+         for (int t_idx = 1; t_idx <= size(p); t_idx++) {
+            poly term_t = p[t_idx];
+            intvec ev_t = leadexp(term_t);
+            
+            int z_id = 0;
+            if (ev_t[z1_idx] == 1) { z_id = 1; }
+            if (ev_t[z2_idx] == 1) { z_id = 2; }
+            
+            poly y_part = term_t / var(n_vars + m_vars + z_id);
+            poly c_poly = leadcoef(y_part);
+            poly y_monom = y_part / c_poly;
+            intvec y_exp = leadexp(y_monom);
+            poly c_temp = c_poly;
+            
+            // Switch to Native Weyl Algebra to assemble the term
+            setring orig_ring;
+            poly m_nc = 1;
+            for(int v = 1; v <= m_vars; v++) {
+               int e = y_exp[n_vars + v];
+               if (e > 0) {
+                  m_nc = m_nc * (H[v]^e);
+               }
+            }
+            
+            poly g_val;
+            if (z_id == 1) { g_val = g1; } else { g_val = g2; }
+            
+            number c_nc = leadcoef(fetch(R_pair, c_temp));
+            s_poly_nc = s_poly_nc + c_nc * m_nc * g_val;
+            setring R_pair;
+         }
+         
+         setring orig_ring;
+         if(s_poly_nc != 0) {
+            res_spolys[sp_idx] = s_poly_nc;
+            sp_idx = sp_idx + 1;
+         }
+         setring R_pair;
+      }
+   }
+   setring orig_ring;
+   kill R_pair; 
+   return(res_spolys);
+}
+
+// =====================================================================
+// Procedure: lsgb 
+// =====================================================================
+proc lsgb(ideal F, ideal H, int max_iter)
+{
+   ideal G_basis = F;
+   int is_groebner = 0;
+   int iter = 0;
+   int i, j, k;
+
+   while(is_groebner == 0 and iter < max_iter)
+   {
+      is_groebner = 1;
+      int n_elements = ncols(G_basis);
+      ideal new_elements;
+      int new_count = 1;
+
+      for(i = 1; i <= n_elements; i++)
+      {
+         if (G_basis[i] == 0) { continue; }
+         for(j = i + 1; j <= n_elements; j++)
+         {
+            if (G_basis[j] == 0) { continue; }
+            ideal sp = syzfam(G_basis[i], G_basis[j], H);
+            
+            for(k = 1; k <= ncols(sp); k++)
+            {
+               poly s = sp[k];
+               if(s != 0)
+               {
+                  poly rem_poly = lsgred(s, H, G_basis);
+                  if(rem_poly != 0)
+                  {
+                     if (new_count > 1) {
+                        rem_poly = lsgred(rem_poly, H, new_elements);
+                     }
+                     
+                     if (rem_poly != 0) {
+                        rem_poly = rem_poly / leadcoef(rem_poly);
+                        new_elements[new_count] = rem_poly;
+                        new_count = new_count + 1;
+                        is_groebner = 0;
+                     }
+                  }
+               }
+            }
+         }
+      }
+
+      if(is_groebner == 0)
+      {
+         for(k = 1; k < new_count; k++)
+         {
+            G_basis[ncols(G_basis) + 1] = new_elements[k];
+         }
+      }
+      iter = iter + 1;
+   }
+
+   for(i = 1; i <= ncols(G_basis); i++)
+   {
+      if(G_basis[i] != 0) { G_basis[i] = G_basis[i] / leadcoef(G_basis[i]); }
+   }
+
+   return(G_basis);
+}
+
+///////////////////////////////////////////////////////////////////////////
+// ===================================================================== //
+//                        USAGE EXAMPLES                                 //
+// ===================================================================== //
+/*
+To run these examples, make sure this file (`ncsg.lib`) is 
+saved in your working directory. You can copy/paste these blocks directly 
+into your Singular terminal.
+
+// ---------------------------------------------------------------------
+// EXAMPLE 1: WEYL ALGEBRA A_1
+// ---------------------------------------------------------------------
+option(noredefine);
+LIB "ncsg.lib"; 
+LIB "nctools.lib";
+
+// 1. SET UP THE G-ALGEBRA (WEYL ALGEBRA A_1)
+ring R = 0, (x, d), dp;
+matrix C[2][2]; C[1,2] = 1;
+matrix D[2][2]; D[1,2] = 1; // [d, x] = 1 (dx = xd + 1)
+def A1 = nc_algebra(C, D);
+setring A1;
+
+// 2. DEFINE THE SUBALGEBRA (H) AND THE INITIAL IDEAL (G)
+ideal H_sub = x^2, x*d, d^2;
+poly g1 = x^4*d^2;
+poly g2 = x^3*d^3 + 3*x^2*d^2 + x*d;
+ideal G_ideal = g1, g2;
+
+// 3. EXECUTE LEFT SAGBI-GROEBNER BASIS ALGORITHM
+ideal SG_Basis = lsgb(G_ideal, H_sub, 10);
+
+
+
+// ---------------------------------------------------------------------
+// EXAMPLE 2: UNIVERSAL ENVELOPING ALGEBRA U(sl_2)
+// ---------------------------------------------------------------------
+option(noredefine);
+LIB "ncsg.lib"; 
+LIB "nctools.lib";
+
+// 1. SET UP THE G-ALGEBRA A = U(sl_2)
+ring R = 0, (e, f, h), lp;
+matrix C[3][3];
+C[1,2] = 1; C[1,3] = 1; C[2,3] = 1;
+matrix D[3][3];
+D[1,2] = h;
+D[1,3] = -2*e; 
+D[2,3] = 2*f;  
+def Usl2 = nc_algebra(C, D);
+setring Usl2;
+
+// 2. DEFINE THE SUBALGEBRA (H) AND THE INITIAL IDEAL (I)
+ideal H_sub = e, h^2, e*h + e;
+poly g1 = e*h^2;
+poly g2 = e^2*h + e^2;
+ideal G_ideal = g1, g2;
+
+// 3. EXECUTE LEFT SAGBI-GROEBNER BASIS ALGORITHM
+ideal SG_Basis = lsgb(G_ideal, H_sub, 10);
+
+
+
+// ---------------------------------------------------------------------
+// EXAMPLE 3: TESTING syzfam
+// ---------------------------------------------------------------------
+option(noredefine);
+LIB "ncsg.lib"; 
+LIB "nctools.lib";
+
+// 1. SET UP THE G-ALGEBRA
+ring R = 0, (x, d), dp;
+matrix C[2][2]; C[1,2] = 1;
+matrix D[2][2]; D[1,2] = 1; 
+def A1 = nc_algebra(C, D);
+setring A1;
+
+// 2. DEFINE POLYNOMIALS AND SUBALGEBRA
+ideal H_sub = x^2, x*d, d^2;
+poly g1 = x^4*d^2;
+poly g2 = x^3*d^3 + 3*x^2*d^2 + x*d;
+
+// 3. EXTRACT THE SYZYGY FAMILY FOR THE PAIR
+print("Computing Syzygy Family for g1 and g2:");
+ideal SF = syzfam(g1, g2, H_sub);
+print(SF);
+*/
